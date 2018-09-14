@@ -5,7 +5,7 @@ import random
 
 ROW_COUNT = 6
 COLUMN_COUNT = 7
-REWARDS = [0, 100, -100]
+REWARDS = [0, 100, -100]  # running, win, loose/unallowed move
 RENDER_SIGNS = [" ", "x", "o"]
 
 
@@ -60,7 +60,7 @@ class FourWinsEnv(gym.Env):
         if not self.action_space.contains(action):
             raise AttributeError("Not an allowed action")
         if self.chip_count_per_column[action] == ROW_COUNT:
-            raise AttributeError("Action not possible, column is full")  # TODO
+            return self._get_state(), REWARDS[2], False, None
         self.field[action][self.chip_count_per_column[action]] = self.current_player
         self.chip_count_per_column[action] += 1
         won = self._check_for_end(action)
