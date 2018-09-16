@@ -29,7 +29,7 @@ class FourWinsEnv(gym.Env):
         self.action_space = gym.spaces.Discrete(COLUMN_COUNT)
         self.field = np.full((COLUMN_COUNT, ROW_COUNT), -1, dtype=np.int)
         self.chip_count_per_column = np.zeros(COLUMN_COUNT, dtype=np.int)
-        self.current_player = int(random.getrandbits(1) + 1)
+        self.current_player = 0
         self.play_both = play_both
         self.reward_range = (min(REWARDS), max(REWARDS))
 
@@ -64,10 +64,13 @@ class FourWinsEnv(gym.Env):
         self.chip_count_per_column[action] += 1
         done = self._check_for_end(action)
         reward = REWARDS[int(done)]
-        self.current_player = (self.current_player + 1) % 2
-        if not done and not self.play_both and self.current_player == 1:
-            new_obs, adv_reward, done, _ = self.step(np.random.randint(self.action_space.n))
-            return new_obs, -adv_reward, done, None
+        if not done and np.all(self.chip_count_per_column == ROW_COUNT):
+            done = True  # reward stays 0 for draw
+        if not done:
+            self.current_player = (self.current_player + 1) % 2
+            result = self.play_adversary_if_necessary()
+            if result:
+                return result
         return self._get_state(), reward, done, None
 
     def _check_for_end(self, last_action):
@@ -115,7 +118,22 @@ class FourWinsEnv(gym.Env):
         self.field = np.full((COLUMN_COUNT, ROW_COUNT), -1, dtype=np.int)
         self.chip_count_per_column = np.zeros(COLUMN_COUNT, dtype=np.int)
         self.current_player = int(random.getrandbits(1))
+        result = self.play_adversary_if_necessary()
+        if result:
+            return result[0]  # the new state
         return self._get_state()
+
+    def play_adversary_if_necessary(self):
+        if not self.play_both and self.current_player == 1:
+            is_not_full = self.chip_count_per_column < ROW_COUNT
+            possible_actions_left = int(np.sum(is_not_full))
+            action = np.random.randint(possible_actions_left)
+            while not is_not_full[action]:
+                action += 1
+            new_obs, adv_reward, done, _ = self.step(action)
+            # print("adv reward", adv_reward)
+            return new_obs, -adv_reward, done, None
+        return False
 
     def _get_state(self):
         """Get the observation."""
