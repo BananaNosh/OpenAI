@@ -2,7 +2,6 @@ import gym
 import numpy as np
 import random
 
-
 ROW_COUNT = 6
 COLUMN_COUNT = 7
 REWARDS = [0, 100, -100]  # running, win, loose/unallowed move
@@ -43,7 +42,7 @@ class FourWinsEnv(gym.Env):
         field_to_print = list(reversed(np.transpose(self.field)))
         print("--" * COLUMN_COUNT + "-")
         for row in field_to_print:
-            print("|" + "|".join([RENDER_SIGNS[field+1] for field in row]) + "|")
+            print("|" + "|".join([RENDER_SIGNS[field + 1] for field in row]) + "|")
         print("--" * COLUMN_COUNT + "-")
 
     def step(self, action):
@@ -63,37 +62,45 @@ class FourWinsEnv(gym.Env):
             return self._get_state(), REWARDS[2], False, None
         self.field[action][self.chip_count_per_column[action]] = self.current_player
         self.chip_count_per_column[action] += 1
-        won = self._check_for_end(action)
-        reward = REWARDS[won]
-        done = won > 0
+        done = self._check_for_end(action)
+        reward = REWARDS[int(done)]
         self.current_player = (self.current_player + 1) % 2
-        if not self.play_both and self.current_player == 1:
+        if not done and not self.play_both and self.current_player == 1:
             new_obs, adv_reward, done, _ = self.step(np.random.randint(self.action_space.n))
             return new_obs, -adv_reward, done, None
         return self._get_state(), reward, done, None
 
     def _check_for_end(self, last_action):
+        """Very ugly way of checking if the newly added chip lead to four in row"""
         row_number = self.chip_count_per_column[last_action] - 1
-        if row_number >= 3:
-            current_column_last_four = self.field[last_action][row_number - 3:row_number + 1]
-            if len(np.unique(current_column_last_four)) == 1:  # all elements equal
-                return current_column_last_four[0]
-        # check row
-        same_next_to_chip = 0
-        color = self.field[last_action][row_number]
-        for i in range(last_action, max(last_action - 4, 0), -1):
-            if self.field[i][row_number] == color:
-                same_next_to_chip += 1
-            else:
-                break
-        for i in range(min(last_action + 1, COLUMN_COUNT-1), min(last_action + 4, COLUMN_COUNT)):
-            if self.field[i][row_number] == color:
-                same_next_to_chip += 1
-            else:
-                break
-        if same_next_to_chip >= 4:
-            return color
-        return 0
+        possible_four_lines_indices = self._get_all_four_lines(last_action, row_number)
+        has_four = np.any(np.all(self.field[possible_four_lines_indices[:, :, 0], possible_four_lines_indices[:, :, 1]] \
+                          == self.current_player, axis=1))
+        return has_four
+
+    @staticmethod
+    def _get_all_four_lines(new_inserted_column, new_inserted_row):
+        line_indices = np.array([np.reshape(np.dstack((np.arange(-3, 1), np.zeros(4))), (4, 2)),
+                                 np.reshape(np.dstack((np.arange(-2, 2), np.zeros(4))), (4, 2)),
+                                 np.reshape(np.dstack((np.arange(-1, 3), np.zeros(4))), (4, 2)),
+                                 np.reshape(np.dstack((np.arange(0, 4), np.zeros(4))), (4, 2)),  # four in row
+                                 # four beneath in column
+                                 np.reshape(np.dstack((np.zeros(4), np.arange(-3, 1))), (4, 2)),
+                                 # four diagonal up
+                                 np.reshape(np.dstack((np.arange(-3, 1), np.arange(-3, 1))), (4, 2)),
+                                 np.reshape(np.dstack((np.arange(-2, 2), np.arange(-2, 2))), (4, 2)),
+                                 np.reshape(np.dstack((np.arange(-1, 3), np.arange(-1, 3))), (4, 2)),
+                                 np.reshape(np.dstack((np.arange(0, 4), np.arange(0, 4))), (4, 2)),
+                                 # four diagonal down
+                                 np.reshape(np.dstack((np.arange(-3, 1), np.arange(3, -1, -1))), (4, 2)),
+                                 np.reshape(np.dstack((np.arange(-2, 2), np.arange(2, -2, -1))), (4, 2)),
+                                 np.reshape(np.dstack((np.arange(-1, 3), np.arange(1, -3, -1))), (4, 2)),
+                                 np.reshape(np.dstack((np.arange(0, 4), np.arange(0, -4, -1))), (4, 2))], dtype=int)
+        line_indices += np.array([new_inserted_column, new_inserted_row])
+        within_grid_indices = np.all(np.all(line_indices >= [0, 0], axis=1), axis=1) \
+                              & np.all(np.all(line_indices < [7, 6], axis=1), axis=1)
+        possible_line_indices = line_indices[within_grid_indices]
+        return possible_line_indices
 
     # def _get_reward(self):
     #     """Reward is given only for winning or loosing so far."""
