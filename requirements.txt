@@ -2,3 +2,5 @@ numpy
 gym
 tensorflow-gpu
 scipy
+matplotlib
+jupyter
