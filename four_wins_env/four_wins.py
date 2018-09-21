@@ -4,7 +4,7 @@ import random
 
 ROW_COUNT = 6
 COLUMN_COUNT = 7
-REWARDS = [0, 100, -100]  # running, win, loose/unallowed move
+REWARDS = [0, 100, -1000]  # running, win, unallowed move (loose through win of opponent)
 RENDER_SIGNS = [" ", "x", "o"]
 
 
@@ -32,6 +32,7 @@ class FourWinsEnv(gym.Env):
         self.current_player = 0
         self.play_both = play_both
         self.reward_range = (min(REWARDS), max(REWARDS))
+        self.last_state_and_action = None
 
         # Observation
         field_space = gym.spaces.Box(np.full_like(self.field, -1), np.full_like(self.field, 1), dtype=np.int)
@@ -59,7 +60,11 @@ class FourWinsEnv(gym.Env):
         if not self.action_space.contains(action):
             raise AttributeError("Not an allowed action")
         if self.chip_count_per_column[action] == ROW_COUNT:
-            return self._get_state(), REWARDS[2], False, None
+            current_state = self._get_state()
+            if self.last_state_and_action == (current_state, action):
+                return current_state, REWARDS[2], True, None
+            self.last_state_and_action = current_state, action
+            return current_state, REWARDS[2], False, None
         self.field[action][self.chip_count_per_column[action]] = self.current_player
         self.chip_count_per_column[action] += 1
         done = self._check_for_end(action)
@@ -118,6 +123,7 @@ class FourWinsEnv(gym.Env):
         self.field = np.full((COLUMN_COUNT, ROW_COUNT), -1, dtype=np.int)
         self.chip_count_per_column = np.zeros(COLUMN_COUNT, dtype=np.int)
         self.current_player = int(random.getrandbits(1))
+        self.last_state_and_action = None
         result = self.play_adversary_if_necessary()
         if result:
             return result[0]  # the new state

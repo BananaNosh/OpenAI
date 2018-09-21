@@ -93,8 +93,6 @@ class GymTraining:
                 mean_gradients = []
 
                 for batch in range(batch_size):
-                    if (batch + 1) % 10 == 0:
-                        print(" batch", batch)
                     done = False
                     rewards = []
                     sampled_gradients = []
@@ -102,8 +100,8 @@ class GymTraining:
                     game_state = self.env.reset()
 
                     while not done:
-                        if render and ((episode % 10 == 0 and batch == 0) or episode == training_episodes - 1):
-                            self.env.render()
+                        # if render and ((episode % 10 == 0 and batch == 0) or episode == training_episodes - 1):
+                        #     self.env.render()
 
                         _observation = np.reshape(self.filter_observation(game_state), [1, -1])
                         sampled_action, sampled_gradient = session.run(
@@ -115,10 +113,10 @@ class GymTraining:
                         sampled_gradients.append(sampled_gradient)
 
                         game_state, reward, done, _ = self.env.step(sampled_action)
-                        if render and ((episode % 10 == 0 and batch == 0) or episode == training_episodes - 1):
-                            self.env.render()
+                        # if render and ((episode % 10 == 0 and batch == 0) or episode == training_episodes - 1):
+                        #     self.env.render()
                         rewards.append(reward)
-
+                    self.env.render()
                     rewards_cache.append(np.sum(rewards))
 
                     rewards = discount_rewards(rewards, discount_factor)
@@ -141,20 +139,24 @@ class GymTraining:
                 print("Model saved in path: %s" % saved)
         self.env.close()
 
-        plt.interactive(False)
-        fig, ax = plt.subplots(1)
+        print(rewards_cache)
+        fig, axes = plt.subplots(2, 2)
 
-        ax.set_title("Rewards")
-        ax.set_xlabel("Episode")
-        ax.set_ylabel("Reward")
+        axes[0, 0].set_title("Rewards")
+        axes[0, 0].set_xlabel("Episode")
+        axes[0, 0].set_ylabel("Reward")
 
-        ax.plot(np.mean(np.array(rewards_cache).reshape(-1, batch_size), axis=1))
+        axes[0, 0].plot(np.mean(np.array(rewards_cache).reshape(-1, batch_size), axis=1))
+        axes[0, 1].plot(rewards_cache)
+        axes[1, 0].plot(np.sum(np.array(rewards_cache).reshape(-1, batch_size) > 0, axis=1))
         plt.show()
 
 
 if __name__ == '__main__':
     # training = GymTraining(gym.make("CartPole-v0"), 4, 8, 2)
     # training.train(save_path="./saved_models/cart_pole_model.ckpt")
-    training = GymTraining(gym.make("FourWins-v0"), 42, 84, 7, lambda x: x[0])
-    training.train(training_episodes=200, batch_size=50, discount_factor=1,
+    env = gym.make("FourWins-v0")
+    # env.play_both = True
+    training = GymTraining(env, 42, 84, 7, lambda x: x[0])
+    training.train(training_episodes=200, batch_size=10, discount_factor=1,
                    save_path="./saved_models/four_wins_model.ckpt", render=True)
