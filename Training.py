@@ -79,8 +79,7 @@ class GymTraining:
                 gradient_placeholders.append(tf.placeholder(tf.float32, gradient.shape))
 
         with tf.variable_scope("training"):
-            trainable_variables = tf.trainable_variables()
-            training_step = optimizer.apply_gradients(zip(gradient_placeholders, trainable_variables),
+            training_step = optimizer.apply_gradients(zip(gradient_placeholders, variables_in_scope),
                                                       global_step=global_step)
         return action, gradient_placeholders, gradients, observation, training_step
 
