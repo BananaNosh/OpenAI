@@ -4,13 +4,53 @@ import random
 
 ROW_COUNT = 6
 COLUMN_COUNT = 7
-REWARDS = [0, 100, -1000]  # running, win, unallowed move (loose through win of opponent)
+REWARDS = [0, 100, -50]  # running, win, unallowed move (loose through win of opponent)
 RENDER_SIGNS = [" ", "x", "o"]
+
+
+class Dynamic(gym.Space):
+    """
+    x where x in available actions {0,1,3,5,...,n-1}
+    Example usage:
+    self.action_space = spaces.Dynamic(max_space=2)
+    """
+
+    # noinspection PyMissingConstructor
+    def __init__(self, max_space):
+        self.n = max_space
+        self.available_actions = range(0, max_space)
+
+    def disable_actions(self, actions):
+        """ You would call this method inside your environment to remove available actions"""
+        self.available_actions = [action for action in self.available_actions if action not in actions]
+        return self.available_actions
+
+    def enable_actions(self, actions):
+        """ You would call this method inside your environment to enable actions"""
+        self.available_actions = self.available_actions.append(actions)
+        return self.available_actions
+
+    def sample(self):
+        return np.random.choice(self.available_actions)
+
+    def contains(self, x):
+        return x in self.available_actions
+
+    @property
+    def shape(self):
+        """Return the new shape here"""
+        return ()
+
+    def __repr__(self):
+        return "Dynamic(%d)" % self.n
+
+    def __eq__(self, other):
+        return self.n == other.n
 
 
 class FourWinsEnv(gym.Env):
     """
-    Define a simple Banana environment.
+    Define a simple environment for FourWins.
 
     The environment defines which actions can be taken at which point and
     when the agent receives which reward.
@@ -26,7 +66,7 @@ class FourWinsEnv(gym.Env):
         # logging.info("BananaEnv - Version {}".format(self.__version__))
         print(f"FourWinsEnv - Version{self.__version__}")
 
-        self.action_space = gym.spaces.Discrete(COLUMN_COUNT)
+        self.action_space = Dynamic(COLUMN_COUNT)
         self.field = np.full((COLUMN_COUNT, ROW_COUNT), -1, dtype=np.int)
         self.chip_count_per_column = np.zeros(COLUMN_COUNT, dtype=np.int)
         self.current_player = 0
@@ -58,6 +98,7 @@ class FourWinsEnv(gym.Env):
             info: nothing so far
         """
         if not self.action_space.contains(action):
+            print(action)
             raise AttributeError("Not an allowed action")
         if self.chip_count_per_column[action] == ROW_COUNT:
             current_state = self._get_state()
@@ -69,6 +110,8 @@ class FourWinsEnv(gym.Env):
         self.chip_count_per_column[action] += 1
         done = self._check_for_end(action)
         reward = REWARDS[int(done)]
+        if self.chip_count_per_column[action] == ROW_COUNT:
+            self.action_space.disable_actions([action])
         if not done and np.all(self.chip_count_per_column == ROW_COUNT):
             done = True  # reward stays 0 for draw
         if not done:
