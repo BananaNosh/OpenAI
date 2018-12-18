@@ -47,7 +47,6 @@ class GymTraining:
     def build_graph(self, decay_rate, decay_steps, initial_learning_rate, variable_scope=None):
         availability = tf.placeholder(tf.float32, [self.action_count])
         observation = tf.placeholder(tf.float32, [None, self.input_layer_size])
-        action_count = tf.placeholder(tf.float32)
         global_step = tf.Variable(0, trainable=False)
 
         with tf.variable_scope("readout_layer"):
@@ -63,10 +62,9 @@ class GymTraining:
             gated = tf.multiply(action_probabilities, availability)
             log_probabilities = tf.log(gated)
             gated_probs = tf.divide(gated, tf.reduce_sum(gated))
-            action = tf.py_func(np.random.choice, [action_count, tf.constant(1),
-                                                   tf.constant(False), gated_probs], tf.float32)
-            # action = tf.multinomial(log_probabilities, num_samples=1)[0][0]
+            action = tf.multinomial(log_probabilities, num_samples=1)[0][0]
             log_probability = log_probabilities[:, tf.to_int32(action)]
+            gated_probability = gated_probs[:, tf.to_int32(action)]
 
         with tf.variable_scope("trainable_variables"):
             trainable_variables = tf.trainable_variables()
@@ -76,7 +74,7 @@ class GymTraining:
         with tf.variable_scope("gradients"):
             learning_rate = tf.train.exponential_decay(initial_learning_rate, global_step, decay_steps, decay_rate)
             optimizer = tf.train.AdamOptimizer(learning_rate)
-            gradients_and_variables = optimizer.compute_gradients(gated_probs, var_list=variables_in_scope)
+            gradients_and_variables = optimizer.compute_gradients(log_probability, var_list=variables_in_scope)
             gradients = [gradient_and_variable[0] * -1 for gradient_and_variable in gradients_and_variables]
 
         # Create placeholders for gradient tensors
@@ -88,7 +86,7 @@ class GymTraining:
         with tf.variable_scope("training"):
             training_step = optimizer.apply_gradients(zip(gradient_placeholders, variables_in_scope),
                                                       global_step=global_step)
-        return action, gradient_placeholders, gradients, observation, availability, training_step, log_probabilities, gated, action_probabilities, action_count
+        return action, gradient_placeholders, gradients, observation, availability, training_step, log_probabilities, gated, action_probabilities, log_probability
 
     def train(self, training_episodes=40, batch_size=10, discount_factor=0.99, initial_learning_rate=0.05,
               decay_steps=100, decay_rate=0.75, render=False, save_path=None):
@@ -105,11 +103,11 @@ class GymTraining:
         log_probs = []
         gated = []
         action_probs = []
-        action_counts = []
+        log_probability = []
         for i in range(self.player_count):
             scope = f"player_{i}"
             with tf.variable_scope(scope):
-                _action, _gradient_placeholders, _gradients, _observation, _availability, _training_step, _log_probabilities, _gated, _action_probabilities, _action_count \
+                _action, _gradient_placeholders, _gradients, _observation, _availability, _training_step, _log_probabilities, _gated, _action_probabilities, _log_prob \
                     = self.build_graph(decay_rate, decay_steps, initial_learning_rate, variable_scope=scope)
                 action.append(_action)
                 gradient_placeholders.append(_gradient_placeholders)
@@ -120,7 +118,7 @@ class GymTraining:
                 log_probs.append(_log_probabilities)
                 gated.append(_gated)
                 action_probs.append(_action_probabilities)
-                action_counts.append(_action_count)
+                log_probability.append(_log_prob)
 
         rewards_cache = [[] for _ in range(self.player_count)]
         mean_gradients_cache = [[] for _ in range(self.player_count)]
@@ -148,16 +146,17 @@ class GymTraining:
                                                   for i in range(self.action_count)])
                         print(_availability)
                         current_player = self.get_player_number(game_state)
-                        sampled_action, sampled_gradient, _log_probabilities, _gated, _action_probabilities = session.run(
-                            [action[current_player], gradients[current_player], log_probs[current_player], gated[current_player], action_probs[current_player]],
+                        sampled_action, sampled_gradient, _log_probabilities, _gated, _action_probabilities, _log_probability = session.run(
+                            [action[current_player], gradients[current_player], log_probs[current_player], gated[current_player], action_probs[current_player], log_probability[current_player]],
                             feed_dict={
                                 observation[current_player]: _observation,
-                                availabilities[current_player]: _availability,
-                                action_counts[current_player]: range(self.action_count)
+                                availabilities[current_player]: _availability
                             })
                         print(_action_probabilities)
                         print(_gated)
                         print(_log_probabilities)
+                        print(_log_probability)
+                        print(sampled_action)
                         sampled_gradients[current_player].append(sampled_gradient)
 
                         game_state, reward, done, _ = self.env.step(sampled_action)
@@ -218,4 +217,4 @@ if __name__ == '__main__':
     training = GymTraining(env, 42, 84, 7, player_count=2, observation_from_state=lambda x: x[0],
                            get_player_number=lambda x: x[1])
     training.train(training_episodes=100, batch_size=10, discount_factor=0.99,
-                   save_path="./saved_models/four_wins_model.ckpt", render=True)
+                   save_path="./saved_models/four_wins_model.ckpt", render=False)

@@ -25,9 +25,9 @@ class Dynamic(gym.Space):
         self.available_actions = [action for action in self.available_actions if action not in actions]
         return self.available_actions
 
-    def enable_actions(self, actions):
+    def enable_all(self):
         """ You would call this method inside your environment to enable actions"""
-        self.available_actions = self.available_actions.append(actions)
+        self.available_actions = range(0, self.n)
         return self.available_actions
 
     def sample(self):
@@ -99,6 +99,7 @@ class FourWinsEnv(gym.Env):
         """
         if not self.action_space.contains(action):
             print(action)
+            self.render()
             raise AttributeError("Not an allowed action")
         if self.chip_count_per_column[action] == ROW_COUNT:
             current_state = self._get_state()
@@ -114,6 +115,7 @@ class FourWinsEnv(gym.Env):
             self.action_space.disable_actions([action])
         if not done and np.all(self.chip_count_per_column == ROW_COUNT):
             done = True  # reward stays 0 for draw
+            print("DRAW")
         if not done:
             self.current_player = (self.current_player + 1) % 2
             result = self.play_adversary_if_necessary()
@@ -168,6 +170,7 @@ class FourWinsEnv(gym.Env):
         self.current_player = int(random.getrandbits(1))
         self.last_state_and_action = None
         result = self.play_adversary_if_necessary()
+        self.action_space.enable_all()
         if result:
             return result[0]  # the new state
         return self._get_state()
