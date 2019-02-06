@@ -1,10 +1,11 @@
 import gym
 import numpy as np
 import random
+from gym import spaces
 
 ROW_COUNT = 6
 COLUMN_COUNT = 7
-REWARDS = [0, 100, -50]  # running, win, unallowed move (loose through win of opponent)
+REWARDS = [0, 100, 0]  # running, win, unallowed move (loose through win of opponent)
 RENDER_SIGNS = [" ", "x", "o"]
 
 
@@ -75,8 +76,8 @@ class FourWinsEnv(gym.Env):
         self.last_state_and_action = None
 
         # Observation
-        field_space = gym.spaces.Box(np.full_like(self.field, -1), np.full_like(self.field, 1), dtype=np.int)
-        gym.spaces.Tuple((field_space, gym.spaces.Discrete(2)))
+        field_space = spaces.Box(np.full_like(self.field, -1), np.full_like(self.field, 1), dtype=np.int)
+        spaces.Tuple((field_space, spaces.Discrete(2)))
         self.observation_space = field_space
 
     def render(self, mode='human'):
@@ -165,7 +166,7 @@ class FourWinsEnv(gym.Env):
         Returns:
             (tuple(array,int)) an initial observation
         """
-        self.field = np.full((COLUMN_COUNT, ROW_COUNT), -1, dtype=np.int)
+        self.field = np.full((COLUMN_COUNT, ROW_COUNT), -1, dtype=np.int)  # TODO maybe 0 as neutral
         self.chip_count_per_column = np.zeros(COLUMN_COUNT, dtype=np.int)
         self.current_player = int(random.getrandbits(1))
         self.last_state_and_action = None
