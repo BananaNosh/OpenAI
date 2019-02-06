@@ -61,11 +61,18 @@ class GymTraining:
         with tf.variable_scope("action_selection"):
             minimum = tf.reduce_min(action_probabilities, axis=1)
             gated = tf.multiply(action_probabilities, availability)
-            gated += minimum / 10000
+            gated += minimum / 1000000
             gated = tf.clip_by_value(gated, 0, 1)
             log_probabilities = tf.log(gated)
+            # log_availability = tf.log(tf.clip_by_value(availability+minimum/1000000, 0, 1))
             # gated_probs = tf.divide(gated, tf.reduce_sum(gated))
-            action = tf.multinomial(log_probabilities, num_samples=1)[0][0]
+            act = tf.multinomial(log_probabilities, num_samples=1)[0][0]
+            random_action = tf.multinomial([(availability-1)*10000], num_samples=1)[0][0] # sample some random action from all available actions (uniformly)
+            decaying_prob_random = tf.train.exponential_decay(0.5, global_step, decay_steps, decay_rate) # the probability to pick the random action must be decaying
+            # decaying_prob_random = tf.train.polynomial_decay(0.5, global_step, decay_steps) # can test different kinds of decay
+            random_number = tf.random_uniform([1], minval=0, maxval=1)[0]
+            action = tf.cond(random_number > decaying_prob_random, lambda: act, lambda: random_action) # take best action with certain probability, else take random action
+            # action = act if np.random.rand()>tf.to_float(decaying_prob_random) else random_action
             log_probability = log_probabilities[:, tf.to_int32(action)]
             # gated_probability = gated_probs[:, tf.to_int32(action)]
 
