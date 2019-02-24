@@ -22,7 +22,7 @@ class Dynamic(gym.Space):
         self.available_actions = range(0, max_space)
 
     def disable_actions(self, actions):
-        """ You would call this method inside your environment to remove available actions"""
+        """ You would call this method insifde your environment to remove available actions"""
         self.available_actions = [action for action in self.available_actions if action not in actions]
         return self.available_actions
 

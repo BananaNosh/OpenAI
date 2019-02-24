@@ -59,12 +59,12 @@ class GymTraining:
             print("output:", action_probabilities)
 
         with tf.variable_scope("action_selection"):
-            minimum = tf.reduce_min(action_probabilities, axis=1)
             gated = tf.multiply(action_probabilities, availability)
-            gated += minimum / 1000000
-            gated = tf.clip_by_value(gated, 0, 1)
+            gated = tf.divide(gated, tf.reduce_sum(gated))
+            maximum = tf.reduce_min(tf.boolean_mask(gated, tf.greater(gated, 0)), axis=0)
+            gated = tf.clip_by_value(gated, 1*10**(-30), 1)
             log_probabilities = tf.log(gated)
-            # log_availability = tf.log(tf.clip_by_value(availability+minimum/1000000, 0, 1))
+            # log_availability = tf.log(tf.clip_by_value(availability+maximum/1000000, 0, 1))
             # gated_probs = tf.divide(gated, tf.reduce_sum(gated))
             act = tf.multinomial(log_probabilities, num_samples=1)[0][0]
             random_action = tf.multinomial([(availability-1)*10000], num_samples=1)[0][0] # sample some random action from all available actions (uniformly)
@@ -98,7 +98,7 @@ class GymTraining:
                                                       global_step=global_step)
         return action, gradient_placeholders, gradients, observation, availability, training_step, log_probabilities, gated, action_probabilities, log_probability, out_layer_weights, out_layer_biases, out_layer_activation
 
-    def train(self, training_episodes=40, batch_size=10, discount_factor=0.99, initial_learning_rate=0.005,
+    def train(self, training_episodes=40, batch_size=10, discount_factor=0.99, initial_learning_rate=0.05,
               decay_steps=100, decay_rate=0.75, render=False, save_path=None):
 
         tf.reset_default_graph()
@@ -236,7 +236,13 @@ if __name__ == '__main__':
     # training.train(save_path="./saved_models/cart_pole_model.ckpt", training_episodes=40)
     env = gym.make("FourWins-v0")
     env.play_both = True
-    training = GymTraining(env, 42, 84, 7, player_count=2, observation_from_state=lambda x: x[0],
-                           get_player_number=lambda x: x[1])
-    training.train(training_episodes=20, batch_size=10, discount_factor=0.99,
-                   save_path="./saved_models/four_wins_model_2.ckpt", render=True)
+    training = GymTraining(env, 42, 84, 7, player_count=1, observation_from_state=lambda x: x[0])
+    training.train(training_episodes=20, batch_size=10, discount_factor=0.99, initial_learning_rate=0.005,
+                   save_path="./saved_models/four_wins_model_one_player.ckpt", render=True)
+    # number = 1
+    # while True:
+    #     loga = np.log(number)
+    #     print(number, loga)
+    #     number /= 10
+    #     if number == 0:
+    #         break
