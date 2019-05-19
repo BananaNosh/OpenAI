@@ -3,6 +3,7 @@ import gym
 import matplotlib.pyplot as plt
 import numpy as np
 import tensorflow as tf
+import os
 
 from FourWins import play
 
@@ -44,8 +45,8 @@ class GymTraining:
         self.observation_from_state = observation_from_state if observation_from_state else lambda x: x
 
     def build_graph(self, decay_rate, decay_steps, initial_learning_rate, variable_scope=None):
-        availability = tf.placeholder(tf.float32, [self.action_count])
-        observation = tf.placeholder(tf.float32, [None, self.input_layer_size])
+        availability = tf.placeholder(tf.float32, [self.action_count], name="pl_availability")
+        observation = tf.placeholder(tf.float32, [None, self.input_layer_size], name="pl_observation")
         global_step = tf.Variable(0, trainable=False)
 
         with tf.variable_scope("readout_layer"):
@@ -67,7 +68,7 @@ class GymTraining:
             decaying_prob_random = tf.train.exponential_decay(0.5, global_step, decay_steps, decay_rate) # the probability to pick the random action must be decaying
             # decaying_prob_random = tf.train.polynomial_decay(0.5, global_step, decay_steps) # can test different kinds of decay
             random_number = tf.random_uniform([1], minval=0, maxval=1)[0]
-            action = tf.cond(random_number > decaying_prob_random, lambda: act, lambda: random_action) # take best action with certain probability, else take random action
+            action = tf.cond(random_number > decaying_prob_random, lambda: act, lambda: random_action, name="output_action") # take best action with certain probability, else take random action
             # action = act if np.random.rand()>tf.to_float(decaying_prob_random) else random_action
             log_probability = log_probabilities[:, tf.to_int32(action)]
 
@@ -125,7 +126,7 @@ class GymTraining:
                         _observation = np.reshape(self.observation_from_state(game_state), [1, -1])
                         _availability = np.array([1 if self.env.action_space.contains(i) else 0
                                                   for i in range(self.action_count)])
-                        print("availability", _availability)
+                        # print("availability", _availability)
                         sampled_action, sampled_gradient, _log_probabilities, _gated, _action_probabilities, _log_probability, _weights, _biases, _out_activations, _gradients = session.run(
                             [action, gradients,
                              log_probabilities, gated, action_probabilities, log_prob,
@@ -135,11 +136,11 @@ class GymTraining:
                                 availability: _availability
                             })
                         # print("gradients", _gradients)
-                        print("act probs", _action_probabilities)
-                        print("gated", _gated)
-                        print("log probs", _log_probabilities)
-                        print("log_prob", _log_probability)
-                        print("action", sampled_action)
+                        # print("act probs", _action_probabilities)
+                        # print("gated", _gated)
+                        # print("log probs", _log_probabilities)
+                        # print("log_prob", _log_probability)
+                        # print("action", sampled_action)
                         # print("weights", _weights)
                         # print("biases", _biases)
                         # print("out_activations", _out_activations)
@@ -169,16 +170,23 @@ class GymTraining:
                         feed_dict = {placeholder: mean_gradient[j]
                                      for j, placeholder in enumerate(gradient_placeholders)}
                         session.run(training_step, feed_dict=feed_dict)
+                if save_path and episode % 10 == 0:
+                    folder, filename = os.path.split(save_path)
+                    folder = os.path.join(folder, f"e_{episode}")
+                    if not os.path.exists(folder):
+                        os.mkdir(folder)
+                    tf.train.Saver().save(session, os.path.join(folder, filename))
+
             if save_path:
                 saved = tf.train.Saver().save(session, save_path)
                 print("Model saved in path: %s" % saved)
             if test_play_function is not None:
                 ai_plays = lambda _observation, _availability: session.run(
-                            [action],
-                            feed_dict={
-                                observation: np.reshape(_observation, [1, -1]),
-                                availability: _availability
-                            })[0]
+                    [action],
+                    feed_dict={
+                        observation: np.reshape(_observation, [1, -1]),
+                        availability: _availability
+                    })[0]
                 test_play_function(self.env, ai_plays)
 
         self.env.close()
