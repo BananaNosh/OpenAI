@@ -62,13 +62,14 @@ class GymTraining:
             gated = tf.multiply(action_probabilities, availability)
             gated = tf.divide(gated, tf.reduce_sum(gated))
             gated = tf.clip_by_value(gated, 1*10**(-30), 1)
-            log_probabilities = tf.log(gated)
-            act = tf.multinomial(log_probabilities, num_samples=1)[0][0]
+            log_probabilities = tf.log(gated, name="log_prob")
+            act_wrapped = tf.multinomial(log_probabilities, num_samples=1, name="output_action")
+            act = act_wrapped[0][0]
             random_action = tf.multinomial([(availability-1)*10000], num_samples=1)[0][0] # sample some random action from all available actions (uniformly)
             decaying_prob_random = tf.train.exponential_decay(0.5, global_step, decay_steps, decay_rate) # the probability to pick the random action must be decaying
             # decaying_prob_random = tf.train.polynomial_decay(0.5, global_step, decay_steps) # can test different kinds of decay
             random_number = tf.random_uniform([1], minval=0, maxval=1)[0]
-            action = tf.cond(random_number > decaying_prob_random, lambda: act, lambda: random_action, name="output_action") # take best action with certain probability, else take random action
+            action = tf.cond(random_number > decaying_prob_random, lambda: act, lambda: random_action) # take best action with certain probability, else take random action
             # action = act if np.random.rand()>tf.to_float(decaying_prob_random) else random_action
             log_probability = log_probabilities[:, tf.to_int32(action)]
 
@@ -204,6 +205,12 @@ class GymTraining:
         axes[0, 1].plot(rewards_cache, color=color)
         axes[1, 0].plot(np.sum(np.array(rewards_cache).reshape(-1, batch_size) > 0, axis=1), color=color)
         plt.show()
+
+        # checkpoints = [os.path.join("saved_models", f"e_{e}") for e in range(0, training_episodes, 10)]
+        # for c1, c2 in zip(checkpoints[1:], checkpoints[:-1]):
+        #     win_ratios.append(evaluate_checkpoints(c1, c2))
+        # print(win_ratios)
+        # plt.plot(win_ratios)
 
 
 if __name__ == '__main__':
