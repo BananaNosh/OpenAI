@@ -1,0 +1,4 @@
+README schreiben
+
+new layers
+evaluation zwischen epochen
