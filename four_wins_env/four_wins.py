@@ -103,6 +103,7 @@ class FourWinsEnv(gym.Env):
             self.render()
             raise AttributeError("Not an allowed action")
         if self.chip_count_per_column[action] == ROW_COUNT:
+            raise AttributeError("Not an allowed action")
             current_state = self._get_state()
             if self.last_state_and_action == (current_state, action):
                 return current_state, REWARDS[2], True, None

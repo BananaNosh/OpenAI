@@ -7,6 +7,35 @@ import os
 
 from FourWins import play
 
+def conv_net(x, target_size, activation_function=None):
+    fan_in = int(x.shape[-1])
+    conv_inp = tf.reshape(x, (-1, 7,6,1))
+    layer = tf.layers.conv2d(conv_inp, filters=20, kernel_size=3, padding="SAME", activation=tf.nn.relu)
+    print(layer)
+    layer = tf.layers.conv2d(layer, filters=64, kernel_size=5, padding="SAME", activation=tf.nn.relu)
+    print(layer)
+    layer = tf.layers.conv2d(layer, filters=16, kernel_size=3, padding="SAME", activation=tf.nn.relu)
+    print(layer)
+
+    shapes = layer.get_shape().as_list()
+    ff_input = tf.reshape(layer, (-1, shapes[1]*shapes[2]*shapes[3]))
+    print(ff_input)
+    dense_layer = tf.layers.dense(ff_input, 128, activation=tf.nn.relu)
+    print(dense_layer)
+
+    if activation_function == tf.nn.relu:
+        var_init = tf.random_normal_initializer(stddev=2 / fan_in)
+    else:
+        var_init = tf.random_normal_initializer(stddev=fan_in ** (-1 / 2))
+    weights = tf.get_variable("weights", [dense_layer.shape[1], target_size], tf.float32, var_init)
+
+    var_init = tf.constant_initializer(0.0)
+    biases = tf.get_variable("biases", [target_size], tf.float32, var_init)
+
+    activation = tf.matmul(dense_layer, weights) + biases
+
+    return activation_function(activation) if callable(activation_function) else activation, weights, biases, activation
+
 
 def feed_forward_layer(x, target_size, activation_function=None):
     print("Forward-Layer:" + str(x.shape))
@@ -49,13 +78,18 @@ class GymTraining:
         observation = tf.placeholder(tf.float32, [None, self.input_layer_size], name="pl_observation")
         global_step = tf.Variable(0, trainable=False)
 
-        with tf.variable_scope("readout_layer"):
-            readout_layer, _, _, _ = feed_forward_layer(observation, self.hidden_layer_size, tf.nn.tanh)
+        ## FOR OLD VERSION: uncomment the following and comment the three lines below
+        # with tf.variable_scope("readout_layer"):
+        #     readout_layer, _, _, _ = feed_forward_layer(observation, self.hidden_layer_size, tf.nn.tanh)
+        #
+        # with tf.variable_scope("output_layer"):
+        #     action_probabilities, out_layer_weights, out_layer_biases, out_layer_activation = feed_forward_layer(readout_layer, self.read_out_layer_size, tf.nn.softmax)
+        #     if self.read_out_layer_size == 1:
+        #         action_probabilities = tf.concat([action_probabilities, 1 - action_probabilities], axis=1) # TODO check for 2 actions
+        #     print("output:", action_probabilities)
 
-        with tf.variable_scope("output_layer"):
-            action_probabilities, out_layer_weights, out_layer_biases, out_layer_activation = feed_forward_layer(readout_layer, self.read_out_layer_size, tf.nn.softmax)
-            if self.read_out_layer_size == 1:
-                action_probabilities = tf.concat([action_probabilities, 1 - action_probabilities], axis=1) # TODO check for 2 actions
+        with tf.variable_scope("forward_pass"):
+            action_probabilities, out_layer_weights, out_layer_biases, out_layer_activation = conv_net(observation, self.read_out_layer_size, tf.nn.softmax)
             print("output:", action_probabilities)
 
         with tf.variable_scope("action_selection"):
@@ -123,7 +157,6 @@ class GymTraining:
                     while not done:
                         # if render and ((episode % 10 == 0 and batch == 0) or episode == training_episodes - 1):
                         #     self.env.render()
-
                         _observation = np.reshape(self.observation_from_state(game_state), [1, -1])
                         _availability = np.array([1 if self.env.action_space.contains(i) else 0
                                                   for i in range(self.action_count)])
